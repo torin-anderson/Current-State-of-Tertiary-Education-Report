@@ -141,7 +141,6 @@ for title in titles:
     df['timestamp'] = df['created_utc'].apply(lambda epoch:datetime.fromtimestamp(epoch)) #converts created utc to datetime format
     df = df.sort_values(by='created_utc') #sorts dataframe based on earliest posts first
     df=df.reset_index(drop=True)
-    display(df)
     df.to_csv(title + '.csv') #df with game period differentiation saved to csv
 
 
