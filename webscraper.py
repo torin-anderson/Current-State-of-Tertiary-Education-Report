@@ -103,9 +103,7 @@ with open('ApplyingToCollege.json', 'w+') as fp: #creates file
                 time.sleep(4) 
 
 # %%
-#finds all of the posts and commets from websearched data
-
-titles = ['Sat', 'college', 'ApplyingToCollege'] #All of the different subreddits searched through
+titles = ['Sat', 'college', 'ApplyingToCollege']
 
 #function that searches throuhgh json file and saves the author, created time, and the text
 def get_post(jobj):
@@ -132,6 +130,14 @@ def get_comment(jobj):
         comments.append(cobj)
     return comments
 
+#function that finds vector representation for each token
+def get_vector(bow,dct):
+    vector_len = len(dct.token2id)
+    vector = np.zeros(vector_len)
+    for tk in bow:
+        vector[tk[0]] = tk[1]
+    vector = vector/sum(vector)
+    return vector
 
 
 
@@ -154,7 +160,40 @@ for title in titles:
     df['timestamp'] = df['created_utc'].apply(lambda epoch:datetime.fromtimestamp(epoch)) #converts created utc to datetime format
     df = df.sort_values(by='created_utc') #sorts dataframe based on earliest posts first
     df=df.reset_index(drop=True)
-    
-    df.to_csv(title + '.csv') #df saved to csv
+
+    #converts text to tokens, bow, and finds vector representation and cosine similarity
+    df['text'] = df['text'].apply(str.lower)
+    #remove @s, #s, urls, and rt
+    df['tokens'] = df['text'].apply(lambda txt: re.sub(r'@\w+|#\w+|http.+|rt\s', '', txt))
+    #tokenizes the words
+    df['tokens'] = df['tokens'].apply(word_tokenize)
+
+    #find phrases that have been used 30 or more times
+    phraser = Phrases(df['tokens'], min_count=30, delimiter='_')
+    df['tokens'] = df['tokens'].apply(lambda tokens:phraser[tokens])
+
+    #gets rid of stop words
+    stop_words = set(stopwords.words('english'))
+    df['tokens'] = df['tokens'].apply(lambda tokens: [t for t in tokens if t not in stop_words])
+
+    #keeps words tokenized if they are longer than 3 letters
+    df['tokens'] = df['tokens'].apply(lambda tokens: [t for t in tokens if len(t) > 3])
+
+    #stems the token words
+    stemmer = PorterStemmer()
+    df['tokens'] = df['tokens'].apply(lambda tokens: [stemmer.stem(tk) for tk in tokens])
+
+    #gensim dictionary and filters out words that appear less than twenty times
+    dct = Dictionary(df['tokens'])
+    dct.filter_extremes(no_below=20) 
+
+    #creates bow column from the dictionary and rows with three or more bow
+    df['bow'] = df['tokens'].apply(dct.doc2bow)
+    df = df.loc[df['bow'].apply(lambda bow: len(bow) >= 3)]
+
+    #creates vector representation for each index in the bag of words
+    df['vector'] = df['bow'].apply(lambda bow: get_vector(bow, dct))
+
+    df.to_csv(title + '.csv') #df with game period differentiation saved to csv
 
     
